@@ -27,6 +27,25 @@ npm run build
 npm start
 ```
 
+## Deploy su Coolify (VPS)
+
+Il progetto include un `Dockerfile` basato su **Node.js 22 Alpine**, pronto per Coolify.
+
+1. Crea una nuova risorsa **Application** in Coolify
+2. Collega il repository GitHub
+3. Coolify rileverà automaticamente il `Dockerfile`
+4. Porta esposta: **3000**
+5. Avvia il deploy
+
+### Build manuale Docker
+
+```bash
+docker build -t tabella-semplice .
+docker run -p 3000:3000 tabella-semplice
+```
+
+L'app sarà disponibile su http://localhost:3000
+
 ## Tecnologie
 
 - Next.js 16 (App Router)
