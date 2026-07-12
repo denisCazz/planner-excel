@@ -14,6 +14,7 @@ interface MobileToolsBarProps {
   onExportExcel: () => void;
   onExportJson: () => void;
   onNewTable: () => void;
+  onOpenSaved: () => void;
   openPanel: ToolbarSection | null;
   onOpenPanel: (panel: ToolbarSection | null) => void;
 }

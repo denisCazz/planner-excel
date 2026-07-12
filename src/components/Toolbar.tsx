@@ -13,6 +13,7 @@ interface ToolbarProps {
   onExportExcel: () => void;
   onExportJson: () => void;
   onNewTable: () => void;
+  onOpenSaved: () => void;
   section?: ToolbarSection;
   layout?: "vertical" | "horizontal";
 }
@@ -75,6 +76,7 @@ export default function Toolbar({
   onExportExcel,
   onExportJson,
   onNewTable,
+  onOpenSaved,
   section = "all",
   layout = "vertical",
 }: ToolbarProps) {
@@ -91,6 +93,7 @@ export default function Toolbar({
           <ToolButton compact label="Elimina riga" onClick={onRemoveRow} variant="danger">➖</ToolButton>
           <ToolButton compact label="Elimina colonna" onClick={onRemoveColumn} variant="danger">➖</ToolButton>
           <div className="w-px h-9 bg-gray-200 mx-1 hidden sm:block" />
+          <ToolButton compact label="Apri" onClick={onOpenSaved} variant="primary">📂</ToolButton>
           <ToolButton compact label="Nuova tabella" onClick={onNewTable}>📄</ToolButton>
           <ToolButton compact label="Importa Excel" onClick={onImportExcel}>📥</ToolButton>
           <ToolButton compact label="Importa ODS" onClick={onImportOds}>📑</ToolButton>
@@ -128,6 +131,7 @@ export default function Toolbar({
             </h3>
           )}
           <div className={wrapClass}>
+            <ToolButton compact={compact} label="Apri" onClick={onOpenSaved} variant="primary">📂</ToolButton>
             <ToolButton compact={compact} label="Nuova tabella" onClick={onNewTable}>📄</ToolButton>
             <ToolButton compact={compact} label="Importa Excel" onClick={onImportExcel}>📥</ToolButton>
             <ToolButton compact={compact} label="Importa ODS" onClick={onImportOds}>📑</ToolButton>

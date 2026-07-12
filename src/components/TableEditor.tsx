@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import OpenFileModal from "@/components/OpenFileModal";
 import AlignBar from "@/components/AlignBar";
 import CellContent from "@/components/CellContent";
 import CellEditModal from "@/components/CellEditModal";
@@ -9,6 +10,15 @@ import Toolbar from "@/components/Toolbar";
 import type { ToolbarSection } from "@/components/Toolbar";
 import { cellStyleToCss, ROW_HEADER_WIDTH } from "@/lib/cell-style-utils";
 import { computeAutoDimensions } from "@/lib/measure-utils";
+import {
+  createNewFile,
+  deleteSavedFile,
+  listSavedFiles,
+  loadInitialSession,
+  loadSavedFile,
+  saveFile,
+  type SavedFileMeta,
+} from "@/lib/file-storage";
 import {
   getSelectionKeys,
   getSelectionLabel,
@@ -22,11 +32,9 @@ import {
   downloadJson,
   exportToExcel,
   importSpreadsheet,
-  loadFromLocalStorage,
   parseJsonFile,
   removeColumn,
   removeRow,
-  saveToLocalStorage,
   updateCell,
 } from "@/lib/table-utils";
 import type { CellStyle, TableData, TextAlign } from "@/types/table";
@@ -38,6 +46,10 @@ export default function TableEditor() {
   const [editModal, setEditModal] = useState<{ row: number; col: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [currentFileId, setCurrentFileId] = useState<string | null>(null);
+  const [savedFiles, setSavedFiles] = useState<SavedFileMeta[]>([]);
+  const [showOpenModal, setShowOpenModal] = useState(false);
+  const [openModalRequired, setOpenModalRequired] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<ToolbarSection | null>(null);
   const spreadsheetInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -66,15 +78,34 @@ export default function TableEditor() {
     [selection, table]
   );
 
-  useEffect(() => {
-    const saved = loadFromLocalStorage();
-    if (saved) setTable(saved);
-    setLoaded(true);
+  const refreshSavedFiles = useCallback(() => {
+    setSavedFiles(listSavedFiles());
   }, []);
 
   useEffect(() => {
-    if (loaded) saveToLocalStorage(table);
-  }, [table, loaded]);
+    const session = loadInitialSession();
+    if (session.kind === "ready") {
+      setTable(session.data);
+      setCurrentFileId(session.fileId);
+      setLoaded(true);
+    } else if (session.kind === "choose") {
+      setSavedFiles(session.files);
+      setShowOpenModal(true);
+      setOpenModalRequired(true);
+      setLoaded(true);
+    } else {
+      setTable(session.data);
+      setCurrentFileId(session.fileId);
+      setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loaded && currentFileId) {
+      saveFile(currentFileId, table);
+      refreshSavedFiles();
+    }
+  }, [table, loaded, currentFileId, refreshSavedFiles]);
 
   const showMessage = useCallback((msg: string) => {
     setMessage(msg);
@@ -121,7 +152,59 @@ export default function TableEditor() {
     setEditModal(null);
   };
 
-  const handleImportSpreadsheet = () => spreadsheetInputRef.current?.click();
+  const openSavedFile = (id: string) => {
+    const data = loadSavedFile(id);
+    if (!data) {
+      showMessage("File non trovato");
+      refreshSavedFiles();
+      return;
+    }
+    setTable(data);
+    setCurrentFileId(id);
+    setSelection(null);
+    setEditModal(null);
+    setShowOpenModal(false);
+    setOpenModalRequired(false);
+    showMessage(`Aperto: ${data.name}`);
+  };
+
+  const handleOpenSaved = () => {
+    refreshSavedFiles();
+    setShowOpenModal(true);
+    setOpenModalRequired(false);
+  };
+
+  const handleDeleteSaved = (id: string) => {
+    deleteSavedFile(id);
+    refreshSavedFiles();
+    if (currentFileId === id) {
+      setCurrentFileId(null);
+      const remaining = listSavedFiles();
+      if (remaining.length > 0) {
+        setSavedFiles(remaining);
+        setShowOpenModal(true);
+        setOpenModalRequired(true);
+      } else {
+        const created = createNewFile();
+        setTable(created.data);
+        setCurrentFileId(created.id);
+        setShowOpenModal(false);
+        setOpenModalRequired(false);
+      }
+    }
+  };
+
+  const handleCreateNewFile = () => {
+    const created = createNewFile();
+    setTable(created.data);
+    setCurrentFileId(created.id);
+    setSelection(null);
+    setEditModal(null);
+    setShowOpenModal(false);
+    setOpenModalRequired(false);
+    refreshSavedFiles();
+    showMessage("Nuova tabella creata");
+  };
   const handleImportJson = () => jsonInputRef.current?.click();
 
   const onSpreadsheetFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,13 +239,16 @@ export default function TableEditor() {
   };
 
   const handleNewTable = () => {
-    if (confirm("Vuoi creare una nuova tabella? I dati attuali verranno sostituiti.")) {
-      setTable(createEmptyTable());
-      setSelection(null);
-      setEditModal(null);
-      showMessage("Nuova tabella creata");
+    if (
+      confirm(
+        "Creare una nuova tabella? Quella attuale resta salvata e potrai riaprirla con Apri."
+      )
+    ) {
+      handleCreateNewFile();
     }
   };
+
+  const handleImportSpreadsheet = () => spreadsheetInputRef.current?.click();
 
   const selectedRowIndex =
     selection?.type === "row"
@@ -222,6 +308,7 @@ export default function TableEditor() {
       showMessage("JSON scaricato!");
     },
     onNewTable: handleNewTable,
+    onOpenSaved: handleOpenSaved,
   };
 
   const colLabel = (index: number) => String.fromCharCode(65 + (index % 26));
@@ -365,10 +452,20 @@ export default function TableEditor() {
           </div>
           <div className="px-3 sm:px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400">
             {table.rows} righe × {table.cols} colonne
-            {selectionLabel ? ` · ${selectionLabel} selezionata` : ""} · Salvato automaticamente
+            {selectionLabel ? ` · ${selectionLabel} selezionata` : ""} · Salvato automaticamente in JSON
           </div>
         </div>
       </main>
+
+      <OpenFileModal
+        open={showOpenModal}
+        files={savedFiles}
+        required={openModalRequired}
+        onOpen={openSavedFile}
+        onNew={handleCreateNewFile}
+        onDelete={handleDeleteSaved}
+        onClose={openModalRequired ? undefined : () => setShowOpenModal(false)}
+      />
 
       {editModal && modalCell && (
         <CellEditModal

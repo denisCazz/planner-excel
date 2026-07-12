@@ -3,16 +3,18 @@ import type { Cell, CellStyle, TableData } from "@/types/table";
 import { createEmptyCell, createEmptyTable, DEFAULT_CELL_STYLE } from "@/types/table";
 import { stripHtml } from "@/lib/rich-text-utils";
 
-const STORAGE_KEY = "tabella-semplice-data";
+const LEGACY_STORAGE_KEY = "tabella-semplice-data";
 
+/** @deprecated Use file-storage saveFile */
 export function saveToLocalStorage(data: TableData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(data));
 }
 
+/** @deprecated Use file-storage loadSavedFile */
 export function loadFromLocalStorage(): TableData | null {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return null;
   try {
     return normalizeTable(JSON.parse(raw) as TableData);
@@ -173,7 +175,7 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9àèéìòùÀÈÉÌÒÙ\s_-]/g, "").trim() || "tabella";
 }
 
-function normalizeTable(data: TableData): TableData {
+export function normalizeTable(data: TableData): TableData {
   if (!data.cells || !Array.isArray(data.cells)) {
     return createEmptyTable();
   }
