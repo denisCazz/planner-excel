@@ -38,6 +38,11 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* iOS safe area for bottom nav */
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
 /* Prevent zoom on input focus on iOS */
 @media screen and (max-width: 768px) {
   input,

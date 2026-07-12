@@ -1,4 +1,5 @@
 export type TextAlign = "left" | "center" | "right";
+export type TextVariant = "paragraph" | "heading";
 
 export interface CellStyle {
   bold: boolean;
@@ -6,6 +7,8 @@ export interface CellStyle {
   align: TextAlign;
   textColor: string;
   backgroundColor: string;
+  fontSize: number;
+  textVariant: TextVariant;
 }
 
 export interface Cell {
@@ -27,7 +30,11 @@ export const DEFAULT_CELL_STYLE: CellStyle = {
   align: "left",
   textColor: "#1a1a1a",
   backgroundColor: "#ffffff",
+  fontSize: 14,
+  textVariant: "paragraph",
 };
+
+export const FONT_SIZE_OPTIONS = [12, 14, 16, 18, 20, 24] as const;
 
 export function createEmptyCell(): Cell {
   return { value: "", style: { ...DEFAULT_CELL_STYLE } };

@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import type { Cell, CellStyle, TableData } from "@/types/table";
 import { createEmptyCell, createEmptyTable, DEFAULT_CELL_STYLE } from "@/types/table";
+import { stripHtml } from "@/lib/rich-text-utils";
 
 const STORAGE_KEY = "tabella-semplice-data";
 
@@ -14,7 +15,7 @@ export function loadFromLocalStorage(): TableData | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as TableData;
+    return normalizeTable(JSON.parse(raw) as TableData);
   } catch {
     return null;
   }
@@ -48,7 +49,7 @@ export function parseJsonFile(file: File): Promise<TableData> {
 
 export function exportToExcel(data: TableData): void {
   const wsData: (string | number)[][] = data.cells.map((row) =>
-    row.map((cell) => cell.value)
+    row.map((cell) => stripHtml(cell.value))
   );
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
@@ -60,6 +61,13 @@ export function exportToExcel(data: TableData): void {
       const style: Record<string, unknown> = {};
       if (s.bold) style.font = { ...(style.font as object), bold: true };
       if (s.italic) style.font = { ...(style.font as object), italic: true };
+      const fontSize = s.textVariant === "heading" ? Math.max(s.fontSize, 18) : s.fontSize;
+      if (fontSize !== DEFAULT_CELL_STYLE.fontSize || s.textVariant === "heading") {
+        style.font = { ...(style.font as object), sz: fontSize };
+      }
+      if (s.textVariant === "heading") {
+        style.font = { ...(style.font as object), bold: true };
+      }
       if (s.align !== "left") {
         style.alignment = { horizontal: s.align };
       }
@@ -80,7 +88,7 @@ export function exportToExcel(data: TableData): void {
   XLSX.writeFile(wb, `${sanitizeFilename(data.name)}.xlsx`);
 }
 
-export function importFromExcel(file: File): Promise<TableData> {
+export function importSpreadsheet(file: File): Promise<TableData> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -111,7 +119,7 @@ export function importFromExcel(file: File): Promise<TableData> {
           })
         );
 
-        const name = file.name.replace(/\.(xlsx|xls)$/i, "") || "Tabella importata";
+        const name = file.name.replace(/\.(xlsx|xls|ods)$/i, "") || "Tabella importata";
         resolve({
           name,
           rows,
@@ -120,7 +128,7 @@ export function importFromExcel(file: File): Promise<TableData> {
           updatedAt: new Date().toISOString(),
         });
       } catch {
-        reject(new Error("File Excel non valido"));
+        reject(new Error("File non valido (supportati: Excel e ODS)"));
       }
     };
     reader.onerror = () => reject(new Error("Errore nella lettura del file"));
@@ -128,10 +136,18 @@ export function importFromExcel(file: File): Promise<TableData> {
   });
 }
 
+/** @deprecated Use importSpreadsheet */
+export const importFromExcel = importSpreadsheet;
+
 function applyXlsxStyle(style: CellStyle, s: Record<string, unknown>): void {
   const font = s.font as Record<string, unknown> | undefined;
   if (font?.bold) style.bold = true;
   if (font?.italic) style.italic = true;
+  const sz = font?.sz as number | undefined;
+  if (sz) {
+    style.fontSize = sz;
+    if (sz >= 18) style.textVariant = "heading";
+  }
   const align = (s.alignment as Record<string, string> | undefined)?.horizontal;
   if (align === "center" || align === "right" || align === "left") {
     style.align = align;
@@ -184,12 +200,21 @@ function normalizeTable(data: TableData): TableData {
   };
 }
 
-export function addRow(data: TableData): TableData {
+export function addRow(data: TableData, afterIndex?: number): TableData {
   const newRow = Array.from({ length: data.cols }, () => createEmptyCell());
+  const insertAt =
+    afterIndex !== undefined
+      ? Math.min(Math.max(afterIndex + 1, 0), data.rows)
+      : data.rows;
+  const cells = [
+    ...data.cells.slice(0, insertAt),
+    newRow,
+    ...data.cells.slice(insertAt),
+  ];
   return {
     ...data,
     rows: data.rows + 1,
-    cells: [...data.cells, newRow],
+    cells,
     updatedAt: new Date().toISOString(),
   };
 }
